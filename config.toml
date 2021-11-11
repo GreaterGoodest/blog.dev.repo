@@ -7,3 +7,7 @@ theme = "m10c"
   [markup.goldmark]
     [markup.goldmark.renderer]
       unsafe = true
+
+[params]
+  author = "Ryan Good"
+  avatar = "images/greatergoodest.jpg"
