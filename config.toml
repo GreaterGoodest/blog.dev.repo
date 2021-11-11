@@ -11,3 +11,4 @@ theme = "m10c"
 [params]
   author = "Ryan Good"
   avatar = "images/greatergoodest.jpg"
+  description = "Blogging about netsec and malware stuff"
