@@ -125,17 +125,38 @@ We invoke readelf with the following flags:
 
 The .text section of a binary typically contains the executable code. We can see that the .text segment is mapped to address 0x401060 in virtual memory, which is associated with address 0x1060 in on the physical file. By association, we know that our function of interest resides from address 0x1142 to 0x1154 (basically just strip off the leading 40).
 
-Let's verify this using hexedit. If you refer to the previous objdump output, you'll see our function beings with the following bytes: 55 48 89 e5. 
+Let's verify this using hexedit. If you refer to the previous objdump output, you'll see our function begins with the following bytes: 55 48 89 e5. 
 
 ![hexedit GIF](/images/hexedit.gif)
 
+Now that we've verified the address space of our function, let's encrypt it.
+
+```shell
+rgood@debian:~/Playground/self-decrypt$ ./encrypt.py main 0x1142 0x1154
+Encrypting main from address 4418 to address 4436
+```
+
+Let's take another look at the function
+
+```shell
+rgood@debian:~/Playground/self-decrypt$ objdump -M intel -D main | grep "<encrypt_me>:" -A 7
+0000000000401142 <encrypt_me>:
+  401142:       af                      scas   eax,DWORD PTR es:[rdi]
+  401143:       b2 73                   mov    dl,0x73
+  401145:       1f                      (bad)  
+  401146:       b2 77                   mov    dl,0x77
+  401148:       c7                      (bad)  
+  401149:       4d f4                   rex.WRB hlt 
+  40114b:       fa                      cli
+```
+
+As expected, it is now unintelligible. If we attempt to execute the binary, it will segfault once it reaches the encrypted function.
+
+![segfault GIF](/images/segfault1.gif)
+
+-----
+
 TODO: 
-- Show how to find address on disk
-- Encrypt
-- Show in objdump
-- Encrypt encrypt_me()
-- Show segfault
-- Dive in with gdb
 - Add decryption logic
 - Show segfault due to protections
 - Show protections in readelf
