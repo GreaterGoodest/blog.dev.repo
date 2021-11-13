@@ -1,6 +1,6 @@
 ---
-title: "THICCelf Part 1: Background"
-date: 2021-11-11T13:00:44-06:00
+title: "ELF Science Part 1"
+date: 2021-11-12T13:00:44-06:00
 draft: true
 ---
 
@@ -16,7 +16,7 @@ An astute reader may immediately ask the question, "But if the binary is encrypt
 
 ------
 
-A possible way to do this would be to encrypt all functionality besides the entrypoint, then have the process decrypt it's other functions at the beginning of execution. Below is an example of how we could accomplish this using Python:
+A possible way to do this would be to encrypt all functionality besides the entrypoint, then have the process decrypt it's other functions at the beginning of execution. Below is an example of how we could accomplish the encryption portion of this using Python:
 
 ```python
 #!/usr/bin/env python3
@@ -56,4 +56,42 @@ if __name__ == "__main__":
     crypt(binary, start, stop)
 ```
 
-Talk about read write execute segment being flaggable, so use mprotect instead.
+The encryption script begins by retrieving the relevant values from the command line invocation. This includes the name of the binary to encrypt, the start address of encryption, and the end address of encryption. If any of these values are missing, we will print usage instructions and exit with a non-zero exit code to signify an error occurred. The start address and stop address will then be converted to integers. They can be provided in either base 10 or base 16 format, thanks to the added exception handling.
+
+Now that we have our values, we can pass them to the encryption function (crypt). The encryption function calculates the length of data to encrypt. It then opens the binary to modify it appropriately. Once the binary is open, the file pointer is moved to the start address via seek() and then the data to encrypt is read in. We convert this data to a bytearray object, as bytes are immutable in python. Now that we have a byte array, we can modify it via our "encryption" method (single byte xor). We'll use a fixed key of 0xFA in this example.
+
+Once encryption is complete, the modified data can be converted back into bytes and written back to the binary. 
+
+------
+
+Next we'll need a basic binary to demonstrate our encryption on:
+
+```c
+#include <stdio.h>
+
+void encrypt_me(){
+    puts("Sneaky function!");
+}
+
+int main()
+{
+    puts("Main function");
+    encrypt_me();
+}
+```
+
+Compilation and execution can be seen below:
+
+![Compilation GIF](/images/basic-bin.gif)
+
+Our compilation command:
+```shell
+gcc -g -no-pie -o main main.c
+```
+Uses the following flags
+- **-g** to enable symbols
+- **-no-pie** to disable position independence
+
+Disabling position independence will greatly simplify the following steps (Handling [PIE](https://access.redhat.com/blogs/766093/posts/1975793) may be the subject of a later post).
+
+TODO: Talk about read write execute segment being flaggable, so use mprotect instead.
