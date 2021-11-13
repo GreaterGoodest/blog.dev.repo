@@ -10,9 +10,9 @@ There are a number of ways of doing this, including breaking your payload up int
 
 Binary hardening can involve a variety of techniques. For example, flexibility in binary formats allows for alterations that can confuse reversing tools. Another possible hardening procedure is **encryption**.
 
-Encrypting our binary will make it far more difficult for an analyst to examine it, as they will no longer be able to use their tools to dissaseemble it. However, this may also increase the chances of the payload being detected due to [entropy](https://www.cyberbit.com/blog/endpoint-security/malware-terms-code-entropy/).
+Encrypting our binary will make it far more difficult for an analyst to examine it, as they will no longer be able to use their tools to dissasemble it. However, this may also increase the chances of the payload being detected due to [entropy](https://www.cyberbit.com/blog/endpoint-security/malware-terms-code-entropy/).
 
-An astute reader may immediately ask the question, "But if the binary is encrypted, how can it execute?". The short answer is: _it can't_. However, we can fix this by having the binary decrypt itself. This series of posts, and the tool developed as a result, will focus on automating the ability to do just that.
+An astute reader may immediately ask the question, "But if the binary is encrypted, how can it execute?". The short answer is: _it can't_. However, we can fix this by having the binary decrypt itself. This series of posts will focus on automating the ability to do just that, as well as potentially adding additional hardening techniques.
 
 ------
 
@@ -94,4 +94,50 @@ Uses the following flags
 
 Disabling position independence will greatly simplify the following steps (Handling [PIE](https://access.redhat.com/blogs/766093/posts/1975793) may be the subject of a later post).
 
-TODO: Talk about read write execute segment being flaggable, so use mprotect instead.
+------
+
+Let's take a look at the dissasembly of the encrypt_me() function
+
+```shell
+rgood@debian:~/Playground/self-decrypt$ objdump -M intel -D main | grep "<encrypt_me>:" -A 7
+0000000000401142 <encrypt_me>:
+  401142:       55                      push   rbp
+  401143:       48 89 e5                mov    rbp,rsp
+  401146:       48 8d 3d b7 0e 00 00    lea    rdi,[rip+0xeb7]        # 402004 <_IO_stdin_used+0x4>
+  40114d:       e8 ee fe ff ff          call   401040 <puts@plt>
+  401152:       90                      nop
+  401153:       5d                      pop    rbp
+  401154:       c3                      ret
+```
+
+The function begins at addres 0x401142 in virtual memory. However, we want to encrypt the function while it resides on disk. This means that we'll need to determine the functions address within the binary.
+
+We can accomplish this using the readelf utility:
+
+```shell
+rgood@debian:~/Playground/self-decrypt$ readelf -SW ./main | grep .text
+  [13] .text             PROGBITS        0000000000401060 001060 0001c1 00  AX  0   0 16
+```
+
+We invoke readelf with the following flags:
+- -S to read the Sections of the binary
+- -W to output in wide format for readability
+
+The .text section of a binary typically contains the executable code. We can see that the .text segment is mapped to address 0x401060 in virtual memory, which is associated with address 0x1060 in on the physical file. By association, we know that our function of interest resides from address 0x1142 to 0x1154 (basically just strip off the leading 40).
+
+Let's verify this using hexedit. If you refer to the previous objdump output, you'll see our function beings with the following bytes: 55 48 89 e5. 
+
+![hexedit GIF](/images/hexedit.gif)
+
+TODO: 
+- Show how to find address on disk
+- Encrypt
+- Show in objdump
+- Encrypt encrypt_me()
+- Show segfault
+- Dive in with gdb
+- Add decryption logic
+- Show segfault due to protections
+- Show protections in readelf
+- Talk about read write execute segment being flaggable, so use mprotect instead.
+- Demonstrate decryption working
