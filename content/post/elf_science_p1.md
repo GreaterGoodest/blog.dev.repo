@@ -156,9 +156,181 @@ As expected, it is now unintelligible. If we attempt to execute the binary, it w
 
 -----
 
+Now we'll add our decryption logic:
+
+```c
+#include <stdio.h>
+#include <stdint.h>
+
+typedef int64_t address_t;
+
+void encrypt_me(){
+    puts("Sneaky function!");
+}
+
+int main()
+{
+    int retval = 0;
+
+    puts("Main function");
+
+    void *addr = encrypt_me; 
+    address_t function_size = (address_t)main - (address_t)encrypt_me - 1; // Calculates distance between encrypt_me() and main()
+    
+    /* Decryption loop */
+    while (function_size > 0)
+    {
+        *(int *)addr = *(int *)addr ^ 0xFA;
+        addr += 1;
+        function_size -= 1;
+    }
+    /* End Decryption loop */
+    
+    encrypt_me();
+}
+```
+
+There's a lot going on here so let's break it down.
+
+First of all we'll create a new type to represent addresses: **address_t**. This will be a 64 bit integer since we're dealing with x86-64 architecture.
+
+```c
+typedef int64_t address_t;
+```
+
+The next new addition is grabbing the address of the encrypt_me() function, and then calculating it's size.
+
+```c
+void *addr = encrypt_me; 
+address_t function_size = (address_t)main - (address_t)encrypt_me - 1;
+```
+
+We're using a void* type for the address of encrypt_me here, as we want to increment it by one byte at a time. If we don't do this and instead use an adress_t here, when we try to increment the address (addr+=1), it will increment by 8 bytes. This is because the size of an address on this architecture is 8 bytes (64 bits).
+
+The size of encrypt_me() can be calculated in this way, as we have seen in the objdump output that it resides after main() in memory. Therefore we can find the size of encrypt_me() by calculating the difference between the two, and subtract an additional byte to make the math line up with our encryption function.
+
+Lastly, we have our decryption loop.
+
+```c
+while (function_size > 0)
+{
+    *(int *)addr = *(int *)addr ^ 0xFA;
+    addr += 1;
+    function_size -= 1;
+}
+```
+
+This loop will iterate over each byte in the encrypt_me() function (addr += 1) as long as there are still bytes left to encrypt (function_size > 0).
+
+At each iteration, it will decrypt (xor) the instruction residing at the current address (*(int *)addr) with our key (0xFA). We're converting to an (int *) here to allow for this arithmetic, and dereferencing the pointer to alter the actual instruction instead of the address the instruction resides at. We will then take the result and overwrite the formerly encrypted instruction byte.
+
+You might need to read that last bit a couple of times for it to make sense...
+
+Before we continue, we'll need to check where encrypt_me is living in memory now, as it has most likely moved.
+
+```shell
+rgood@debian:~/Playground/self-decrypt$ objdump -M intel -D main | grep "<encrypt_me>:" -A 18
+0000000000401122 <encrypt_me>:
+  401122:       55                      push   rbp
+  401123:       48 89 e5                mov    rbp,rsp
+  401126:       48 8d 3d d7 0e 00 00    lea    rdi,[rip+0xed7]        # 402004 <_IO_stdin_used+0x4>
+  40112d:       e8 fe fe ff ff          call   401030 <puts@plt>
+  401132:       90                      nop
+  401133:       5d                      pop    rbp
+  401134:       c3                      ret    
+
+0000000000401135 <main>:
+  401135:       55                      push   rbp
+  401136:       48 89 e5                mov    rbp,rsp
+  401139:       48 83 ec 20             sub    rsp,0x20
+  40113d:       c7 45 ec 00 00 00 00    mov    DWORD PTR [rbp-0x14],0x0
+  401144:       48 8d 3d ca 0e 00 00    lea    rdi,[rip+0xeca]        # 402015 <_IO_stdin_used+0x15>
+  40114b:       e8 e0 fe ff ff          call   401030 <puts@plt>
+  401150:       48 8d 05 cb ff ff ff    lea    rax,[rip+0xffffffffffffffcb]        # 401122 <encrypt_me>
+  401157:       48 89 45 f8             mov    QWORD PTR [rbp-0x8],rax
+  40115b:       48 8d 05 d3 ff ff ff    lea    rax,[rip+0xffffffffffffffd3]        # 401135 <main>
+```
+
+Based on this, we know we'll need to provide a start address of 0x401122 and a stop address of 0x401134 to our encryption python script.
+
+Alright, let's do this!
+
+![Decryption Failure](/images/decrypt-fail.gif)
+
+Oh no! It failed. Don't worry, we'll have that fixed up in no time.
+
+-----
+
+As mentioned previously, the code in a binary resides in the .text section, let's take another look at it...
+
+```shell
+rgood@debian:~/Playground/self-decrypt$ readelf -SW main | grep .text
+[13] .text             PROGBITS        0000000000401040 001040 0001d1 00  AX  0   0 16
+```
+
+If you look near the end of the line, you'll see "AX". These letters represent the current permission flags of this section of the binary. This differs from something like the data section, which has permissions "WA".
+
+```shell
+[23] .data             PROGBITS        0000000000404020 003020 000010 00  WA  0   0  8
+```
+
+The big difference between the two, is that the .text section is executable (makes sense since this is where the code lives) but not writable, and the .data section is writable but not executable.
+
+This is why we received a segfault when we attempted to write to the .text section in memory.
+
+Both of these sections are loaded into something called a _segment_ once the binary is executing. Let's take a look at these segments.
+
+```shell
+
+Elf file type is EXEC (Executable file)
+Entry point 0x401040
+There are 11 program headers, starting at offset 64
+
+Program Headers:
+  Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
+  PHDR           0x000040 0x0000000000400040 0x0000000000400040 0x000268 0x000268 R   0x8
+  INTERP         0x0002a8 0x00000000004002a8 0x00000000004002a8 0x00001c 0x00001c R   0x1
+      [Requesting program interpreter: /lib64/ld-linux-x86-64.so.2]
+  LOAD           0x000000 0x0000000000400000 0x0000000000400000 0x000438 0x000438 R   0x1000
+  LOAD           0x001000 0x0000000000401000 0x0000000000401000 0x00021d 0x00021d R E 0x1000
+  LOAD           0x002000 0x0000000000402000 0x0000000000402000 0x000188 0x000188 R   0x1000
+  LOAD           0x002e10 0x0000000000403e10 0x0000000000403e10 0x000220 0x000228 RW  0x1000
+  DYNAMIC        0x002e20 0x0000000000403e20 0x0000000000403e20 0x0001d0 0x0001d0 RW  0x8
+  NOTE           0x0002c4 0x00000000004002c4 0x00000000004002c4 0x000044 0x000044 R   0x4
+  GNU_EH_FRAME   0x002024 0x0000000000402024 0x0000000000402024 0x000044 0x000044 R   0x4
+  GNU_STACK      0x000000 0x0000000000000000 0x0000000000000000 0x000000 0x000000 RW  0x10
+  GNU_RELRO      0x002e10 0x0000000000403e10 0x0000000000403e10 0x0001f0 0x0001f0 R   0x1
+
+ Section to Segment mapping:
+  Segment Sections...
+   00     
+   01     .interp 
+   02     .interp .note.ABI-tag .note.gnu.build-id .gnu.hash .dynsym .dynstr .gnu.version .gnu.version_r .rela.dyn .rela.plt 
+   03     .init .plt .text .fini 
+   04     .rodata .eh_frame_hdr .eh_frame 
+   05     .init_array .fini_array .dynamic .got .got.plt .data .bss 
+   06     .dynamic 
+   07     .note.ABI-tag .note.gnu.build-id 
+   08     .eh_frame_hdr 
+   09     
+   10     .init_array .fini_array .dynamic .got
+```
+
+Reading this output, we can see from the Section to Segment mapping that the .text section maps to segment 3, shown below:
+
+```shell
+LOAD           0x001000 0x0000000000401000 0x0000000000401000 0x00021d 0x00021d R E 0x1000
+```
+
+As expected, this segment has Read and Execute permissions, but no write permissions.
+
+We could modify the binary to make the .text section and segment 03 writable, but many defensive tools [signaturize](https://blog.malwarebytes.com/glossary/signature/#:~:text=In%20computer%20security%2C%20a%20signature,used%20by%20families%20of%20malware.) this kind of behavior.
+
+Instead, we'll use the mprotect function to change the permissions in memory at execution time.
+
+-----
+
+
+
 TODO: 
-- Add decryption logic
-- Show segfault due to protections
-- Show protections in readelf
-- Talk about read write execute segment being flaggable, so use mprotect instead.
 - Demonstrate decryption working
