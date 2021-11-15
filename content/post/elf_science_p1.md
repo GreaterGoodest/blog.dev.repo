@@ -6,21 +6,35 @@ draft: true
 
 ## Introduction
 
-One of the most difficult parts of creating offensive tools is preventing detection. Even if you employ the most advanced methodologies available, your tool will eventually be detected. At this point, the goal becomes making the analyst/reversers life as difficult as possible.
+Prereqs:
+- [C](https://www.youtube.com/watch?v=1uR4tL-OSNI&ab_channel=CalebCurry)
+- [Python](https://www.youtube.com/watch?v=kqtD5dpn9C8&ab_channel=ProgrammingwithMosh)
+- Mimimal [x86](https://www.youtube.com/watch?v=75gBFiFtAb8&ab_channel=HackUCF)
+- Some flavor of 64 bit linux (I'll be using [Debian](https://www.debian.org/distrib/))
+
+All code described can be found [here](https://github.com/GreaterGoodest/elf-magic-1)
+
+One of the most difficult parts of creating offensive tools is preventing detection. Even if you employ the most advanced methodologies available, your tool will likely be detected eventually. At this point, the goal becomes making the analyst/reversers life as difficult as possible.
 
 There are a number of ways of doing this, including breaking your payload up into smaller chunks to limit exposure and [loading functionality at runtime](https://x-c3ll.github.io/posts/fileless-memfd_create/). However, this post will focus on a different method. "Hardening" binary payloads. 
 
-Binary hardening can involve a variety of techniques. For example, flexibility in binary formats allows for alterations that can confuse reversing tools. Another possible hardening procedure is **encryption**.
+Binary hardening can involve a variety of techniques. For example, flexibility in binary formats allows for alterations that can confuse reversing tools. Another possible hardening procedure is **encryption**. This is also known as [polymorphism](https://security.stackexchange.com/questions/4619/oligomorphism-vs-polymorphism-vs-metamorphism-in-malware).
+
+<div style="text-align:center;">
+    <img alt="Polyjuice potion" src="/images/Polyjuice-Potion.jpg" height=250 />
+</div>
 
 Encrypting our binary will make it far more difficult for an analyst to examine it, as they will no longer be able to use their tools to dissasemble it. However, this may also increase the chances of the payload being detected due to [entropy](https://www.cyberbit.com/blog/endpoint-security/malware-terms-code-entropy/).
 
 An astute reader may immediately ask the question, "But if the binary is encrypted, how can it execute?". The short answer is: _it can't_. However, we can fix this by having the binary decrypt itself. This series of posts will focus on automating the ability to do just that, as well as potentially adding additional hardening techniques.
 
+Disclaimer: In order to better defend against malware, it's important to understand it's functionality. This post is intended to be used as an educational resource only.
+
 ------
 
 ## Encryption
 
-A possible way to do this would be to encrypt all functionality besides the entrypoint, then have the process decrypt it's other functions at the beginning of execution. Below is an example of how we could accomplish the encryption portion of this using Python:
+Now that we've established our goal of creating polymorphic code, how would we go about it? Once possible strategy is to encrypt all functionality besides the entrypoint, then have the process decrypt it's other functions at the beginning of execution. Below is an example of how we could accomplish the encryption portion of this using Python:
 
 ```python
 #!/usr/bin/env python3
@@ -60,11 +74,51 @@ if __name__ == "__main__":
     crypt(binary, start, stop)
 ```
 
-The encryption script begins by retrieving the relevant values from the command line invocation. This includes the name of the binary to encrypt, the start address of encryption, and the end address of encryption. If any of these values are missing, we will print usage instructions and exit with a non-zero exit code to signify an error occurred. The start address and stop address will then be converted to integers. They can be provided in either base 10 or base 16 format, thanks to the added exception handling.
+The encryption script begins by retrieving the relevant values from the command line invocation. 
 
-Now that we have our values, we can pass them to the encryption function (crypt). The encryption function calculates the length of data to encrypt. It then opens the binary to modify it appropriately. Once the binary is open, the file pointer is moved to the start address via seek() and then the data to encrypt is read in. We convert this data to a bytearray object, as bytes are immutable in python. Now that we have a byte array, we can modify it via our "encryption" method (single byte xor). We'll use a fixed key of 0xFA in this example.
+```python
+binary = sys.argv[1]                #binary file name
+try:
+    start = int(sys.argv[2])        #encryption start address
+except ValueError:
+    start = int(sys.argv[2], 16)
 
-Once encryption is complete, the modified data can be converted back into bytes and written back to the binary. 
+try:
+    stop = int(sys.argv[3])         #encryption end address
+except ValueError:
+    stop = int(sys.argv[3], 16)
+```
+
+This includes the name of the binary to encrypt, the start address of encryption, and the end address of encryption. If any of these values are missing, we will print usage instructions and exit with a non-zero exit code to signify an error occurred. The start address and stop address will then be converted to integers. They can be provided in either base 10 or base 16 format, thanks to the added exception handling.
+
+Now that we have our values, we can pass them to the encryption function (crypt). The encryption function calculates the length of data to encrypt.
+
+```python
+size = stop - start                 #size of space to be encrypted
+```
+
+It then opens the binary to modify it appropriately. Once the binary is open, the file pointer is moved to the start address via seek() and then the data to encrypt is read in. We convert this data to a bytearray object, as bytes are immutable in python. 
+
+```python
+with open(binary, 'rb+') as f:
+    f.seek(start)                   #move file pointer to start address
+    data = bytearray(f.read(size))  #read in data to be encrypted
+```
+
+Now that we have a byte array, we can modify it via our "encryption" method (single byte xor). We'll use a fixed key of 0xFA in this example.
+
+```python
+for i in range(len(data)):      #encrypt data using single byte xor
+    data[i] = data[i] ^ 0xFA
+```
+
+Once encryption is complete, the modified data can be returned to bytes and written back to the binary. 
+
+```python
+data = bytes(data)              #convert back to bytes for writing to binary
+f.seek(start)                   #return to start address
+f.write(data)                   #replace data with encrypted version
+```
 
 ------
 
@@ -98,7 +152,7 @@ Uses the following flags
 - **-g** to enable symbols
 - **-no-pie** to disable position independence
 
-Disabling position independence will greatly simplify the following steps (Handling [PIE](https://access.redhat.com/blogs/766093/posts/1975793) may be the subject of a later post).
+Disabling position independence will simplify the following steps (We may handle [PIE](https://access.redhat.com/blogs/766093/posts/1975793) in a later post).
 
 ------
 
@@ -118,7 +172,7 @@ rgood@debian:~/Playground/self-decrypt$ objdump -M intel -D main | grep "<encryp
   401154:       c3                      ret
 ```
 
-The function begins at addres 0x401142 in virtual memory. However, we want to encrypt the function while it resides on disk. This means that we'll need to determine the functions address within the binary.
+The function begins at addres 0x401142 in virtual memory. However, we want to encrypt the function while it resides on disk. This means that we'll need to determine the function's address within the binary.
 
 We can accomplish this using the readelf utility:
 
@@ -131,18 +185,24 @@ We invoke readelf with the following flags:
 - -S to read the Sections of the binary
 - -W to output in wide format for readability
 
-The .text section of a binary typically contains the executable code. We can see that the .text segment is mapped to address 0x401060 in virtual memory, which is associated with address 0x1060 in on the physical file. By association, we know that our function of interest resides from address 0x1142 to 0x1154 (basically just strip off the leading 40).
+The .text section of a binary typically contains the executable code. We can see that the .text segment is mapped to address 0x401060 in virtual memory, which is associated with address 0x1060 in on the physical file. By association, we can guess that our function of interest resides from address 0x1142 to 0x1154 (basically just strip off the leading 40).
 
 Let's verify this using hexedit. If you refer to the previous objdump output, you'll see our function begins with the following bytes: 55 48 89 e5. 
 
+```shell
+401142:       55                      push   rbp
+401143:       48 89 e5                mov    rbp,rsp
+```
+
 ![hexedit GIF](/images/hexedit.gif)
 
-Now that we've verified the address space of our function, let's encrypt it.
+Now that we've verified the address space of our function, let's encrypt it. You'll see our hex values are automatically converted to base 10 (0x1142 -> 4418 ; 0x1154 -> 4436).
 
 ```shell
 rgood@debian:~/Playground/self-decrypt$ ./encrypt.py main 0x1142 0x1154
 Encrypting main from address 4418 to address 4436
 ```
+
 
 Let's take another look at the function
 
@@ -215,9 +275,25 @@ void *addr = encrypt_me;
 address_t function_size = (address_t)main - (address_t)encrypt_me - 1;
 ```
 
-We're using a void* type for the address of encrypt_me here, as we want to increment it by one byte at a time. If we don't do this and instead use an adress_t here, when we try to increment the address (addr+=1), it will increment by 8 bytes. This is because the size of an address on this architecture is 8 bytes (64 bits).
+We're using a void* type for the address of encrypt_me here, as we want to increment it by one byte at a time. If we don't do this and instead use an adress_t here, when we try to increment the address (addr+=1) it will increment by 8 bytes. This is because the size of our address_t is 8 bytes (64 bits), and the compiler is trying to help us out.
 
-The size of encrypt_me() can be calculated in this way, as we have seen in the objdump output that it resides after main() in memory. Therefore we can find the size of encrypt_me() by calculating the difference between the two, and subtract an additional byte to make the math line up with our encryption function.
+The size of encrypt_me() can be calculated in this way, as we can see in the objdump output that it resides before main() in memory. The result of this calculation will be (0x401155 - 0x401142 = 0x13 = 19)
+
+```shell
+rgood@debian:~/Playground/self-decrypt$ objdump -M intel -D main | grep "<encrypt_me>:" -A 9                         
+0000000000401142 <encrypt_me>:
+  401142:       55                      push   rbp
+  401143:       48 89 e5                mov    rbp,rsp
+  401146:       48 8d 3d b7 0e 00 00    lea    rdi,[rip+0xeb7]        # 402004 <_IO_stdin_used+0x4>                  
+  40114d:       e8 ee fe ff ff          call   401040 <puts@plt>                                                     
+  401152:       90                      nop
+  401153:       5d                      pop    rbp
+  401154:       c3                      ret
+
+0000000000401155 <main>:
+```
+
+Therefore we can find the size of encrypt_me() by calculating the difference between the two, and subtract an additional byte to make the math line up with our encryption function.
 
 Lastly, we have our decryption loop.
 
@@ -233,8 +309,6 @@ while (function_size > 0)
 This loop will iterate over each byte in the encrypt_me() function (addr += 1) as long as there are still bytes left to encrypt (function_size > 0).
 
 At each iteration, it will decrypt (xor) the instruction residing at the current address (*(int *)addr) with our key (0xFA). We're converting to an (int *) here to allow for this arithmetic, and dereferencing the pointer to alter the actual instruction instead of the address the instruction resides at. We will then take the result and overwrite the formerly encrypted instruction byte.
-
-You might need to read that last bit a couple of times for it to make sense...
 
 Before we continue, we'll need to check where encrypt_me is living in memory now, as it has most likely moved.
 
@@ -290,9 +364,10 @@ The big difference between the two, is that the .text section is executable (mak
 
 This is why we received a segfault when we attempted to write to the .text section in memory.
 
-Both of these sections are loaded into something called a _segment_ once the binary is executing. Let's take a look at these segments.
+Both of these sections are loaded into something called a _segment_ once the binary is executing. Let's take a look at these segments. We'll use readelf with the -lW flags to see the binary's segments in wide formatting.
 
 ```shell
+rgood@debian:~/Playground/self-decrypt$ readelf -lW ./main
 
 Elf file type is EXEC (Executable file)
 Entry point 0x401040
@@ -336,7 +411,7 @@ LOAD           0x001000 0x0000000000401000 0x0000000000401000 0x00021d 0x00021d 
 
 As expected, this segment has Read and Execute permissions, but no write permissions. Can you see where the .data section is mapped to and the relevant segments permissions?
 
-We could modify the binary to make the .text section and segment 03 writable, but many defensive tools [signaturize](https://blog.malwarebytes.com/glossary/signature/#:~:text=In%20computer%20security%2C%20a%20signature,used%20by%20families%20of%20malware.) this kind of behavior.
+We could modify the binary to make the .text section and segment 03 writable, but defensive tools can easily [signaturize](https://blog.malwarebytes.com/glossary/signature/#:~:text=In%20computer%20security%2C%20a%20signature,used%20by%20families%20of%20malware.) this kind of behavior. [Here's](https://balsn.tw/ctf_writeup/20210717-googlectf2021/#polymorph) an example of what that would potentially look like.
 
 Instead, we'll use the mprotect function to change the permissions in memory at execution time.
 
@@ -388,7 +463,7 @@ retval = mprotect((int *)0x401000, 4096, PROT_READ | PROT_WRITE | PROT_EXEC);
 
 We're passing in our page aligned memory space (0x401000) and the amount of memory to modify (4096 bytes). These values must both be [page-aligned](https://scoutapm.com/blog/understanding-page-faults-and-memory-swap-in-outs-when-should-you-worry#:~:text=Linux%20allocates%20memory%20to%20processes,represent%204KB%20of%20physical%20memory.). We're then changing the permissions of that memory to allow for read, write, and exec. This will allow us to modify the code, and still execute it once modification is complete.
 
-A more robust way to implement the alignment is shown below:
+A more robust way to implement the alignment is shown below (just 0's out the last 3 nibbles of the address):
 
 ```c
 address_t page_aligned_addr = (address_t)encrypt_me & 0xFFF000;
@@ -455,3 +530,5 @@ rgood@debian:~/Playground/self-decrypt$ objdump -M intel -D main | grep "<encryp
 And finally, we'll encrypt and run.
 
 ![Decrypt Success](/images/decrypt-success.gif)
+
+Thanks for making it this far! I hope this was educational. I appreciate any feedback and/or suggestions for follow on posts.
