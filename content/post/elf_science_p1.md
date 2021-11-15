@@ -4,6 +4,8 @@ date: 2021-11-12T13:00:44-06:00
 draft: true
 ---
 
+## Introduction
+
 One of the most difficult parts of creating offensive tools is preventing detection. Even if you employ the most advanced methodologies available, your tool will eventually be detected. At this point, the goal becomes making the analyst/reversers life as difficult as possible.
 
 There are a number of ways of doing this, including breaking your payload up into smaller chunks to limit exposure and [loading functionality at runtime](https://x-c3ll.github.io/posts/fileless-memfd_create/). However, this post will focus on a different method. "Hardening" binary payloads. 
@@ -15,6 +17,8 @@ Encrypting our binary will make it far more difficult for an analyst to examine 
 An astute reader may immediately ask the question, "But if the binary is encrypted, how can it execute?". The short answer is: _it can't_. However, we can fix this by having the binary decrypt itself. This series of posts will focus on automating the ability to do just that, as well as potentially adding additional hardening techniques.
 
 ------
+
+## Encryption
 
 A possible way to do this would be to encrypt all functionality besides the entrypoint, then have the process decrypt it's other functions at the beginning of execution. Below is an example of how we could accomplish the encryption portion of this using Python:
 
@@ -64,6 +68,8 @@ Once encryption is complete, the modified data can be converted back into bytes 
 
 ------
 
+## Payload
+
 Next we'll need a basic binary to demonstrate our encryption on:
 
 ```c
@@ -95,6 +101,8 @@ Uses the following flags
 Disabling position independence will greatly simplify the following steps (Handling [PIE](https://access.redhat.com/blogs/766093/posts/1975793) may be the subject of a later post).
 
 ------
+
+## Analysis
 
 Let's take a look at the dissasembly of the encrypt_me() function
 
@@ -155,6 +163,8 @@ As expected, it is now unintelligible. If we attempt to execute the binary, it w
 ![segfault GIF](/images/segfault1.gif)
 
 -----
+
+## Decryption
 
 Now we'll add our decryption logic:
 
@@ -261,6 +271,8 @@ Oh no! It failed. Don't worry, we'll have that fixed up in no time.
 
 -----
 
+## Permissions
+
 As mentioned previously, the code in a binary resides in the .text section, let's take another look at it...
 
 ```shell
@@ -330,6 +342,7 @@ Instead, we'll use the mprotect function to change the permissions in memory at 
 
 -----
 
+## Final
 
 Here's the new version of our self-modifying program:
 
