@@ -322,7 +322,7 @@ Reading this output, we can see from the Section to Segment mapping that the .te
 LOAD           0x001000 0x0000000000401000 0x0000000000401000 0x00021d 0x00021d R E 0x1000
 ```
 
-As expected, this segment has Read and Execute permissions, but no write permissions.
+As expected, this segment has Read and Execute permissions, but no write permissions. Can you see where the .data section is mapped to and the relevant segments permissions?
 
 We could modify the binary to make the .text section and segment 03 writable, but many defensive tools [signaturize](https://blog.malwarebytes.com/glossary/signature/#:~:text=In%20computer%20security%2C%20a%20signature,used%20by%20families%20of%20malware.) this kind of behavior.
 
@@ -331,6 +331,114 @@ Instead, we'll use the mprotect function to change the permissions in memory at 
 -----
 
 
+Here's the new version of our self-modifying program:
 
-TODO: 
-- Demonstrate decryption working
+```c
+#include <stdio.h>
+#include <sys/mman.h>
+#include <errno.h>
+#include <stdint.h>
+
+typedef int64_t address_t;
+
+void encrypt_me(){
+    puts("Sneaky function!");
+}
+
+int main()
+{
+    int retval = 0;
+
+    puts("Main function");
+    retval = mprotect((int *)0x401000, 4096, PROT_READ | PROT_WRITE | PROT_EXEC);
+    if (retval < 0)
+        return errno;
+
+    void *addr = encrypt_me;
+
+    address_t function_size = (address_t)main - (address_t)encrypt_me - 1;
+    while (function_size > 0)
+    {
+        *(int *)addr = *(int *)addr ^ 0xFA;
+        addr+=1;
+        function_size -= 1;
+    }
+    
+    encrypt_me();
+}
+```
+
+The main addition here is the mprotect call
+```c
+retval = mprotect((int *)0x401000, 4096, PROT_READ | PROT_WRITE | PROT_EXEC);
+```
+
+We're passing in our page aligned memory space (0x401000) and the amount of memory to modify (4096 bytes). These values must both be [page-aligned](https://scoutapm.com/blog/understanding-page-faults-and-memory-swap-in-outs-when-should-you-worry#:~:text=Linux%20allocates%20memory%20to%20processes,represent%204KB%20of%20physical%20memory.). We're then changing the permissions of that memory to allow for read, write, and exec. This will allow us to modify the code, and still execute it once modification is complete.
+
+A more robust way to implement the alignment is shown below:
+
+```c
+address_t page_aligned_addr = (address_t)encrypt_me & 0xFFF000;
+```
+
+Which results in the following final version of our code:
+
+```c
+#include <stdio.h>
+#include <sys/mman.h>
+#include <errno.h>
+#include <stdint.h>
+
+typedef int64_t address_t;
+
+void encrypt_me(){
+    puts("Sneaky function!");
+}
+
+int main()
+{
+    int retval = 0;
+
+    puts("Main function");
+    address_t page_aligned_addr = (address_t)encrypt_me & 0xFFF000;
+    retval = mprotect((void *)page_aligned_addr, 4096, PROT_READ | PROT_WRITE | PROT_EXEC);
+    if (retval < 0)
+        return errno;
+
+    void *addr = encrypt_me;
+
+    address_t function_size = (address_t)main - (address_t)encrypt_me - 1;
+    while (function_size > 0)
+    {
+        *(int *)addr = *(int *)addr ^ 0xFA;
+        addr+=1;
+        function_size -= 1;
+    }
+    
+    encrypt_me();
+}
+```
+
+Let's give this another shot. First we'll compile.
+
+```shell
+rgood@debian:~/Playground/self-decrypt$ gcc -g -no-pie -o main main.c
+```
+
+Then we'll check our addresses.
+
+```shell
+rgood@debian:~/Playground/self-decrypt$ objdump -M intel -D main | grep "<encrypt_me>:" -A 7
+0000000000401142 <encrypt_me>:
+  401142:       55                      push   rbp
+  401143:       48 89 e5                mov    rbp,rsp
+  401146:       48 8d 3d b7 0e 00 00    lea    rdi,[rip+0xeb7]        # 402004 <_IO_stdin_used+0x4>
+  40114d:       e8 ee fe ff ff          call   401040 <puts@plt>
+  401152:       90                      nop
+  401153:       5d                      pop    rbp
+  401154:       c3                      ret    
+```
+
+And finally, we'll encrypt and run.
+
+![Decrypt Success](/images/decrypt-success.gif)
