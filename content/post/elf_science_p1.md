@@ -14,27 +14,27 @@ Prereqs:
 
 All code described can be found [here](https://github.com/GreaterGoodest/elf-magic-1)
 
-One of the most difficult parts of creating offensive tools is preventing detection. Even if you employ the most advanced methodologies available, your tool will likely be detected eventually. At this point, the goal becomes making the analyst/reversers life as difficult as possible.
+One of the most difficult parts of creating offensive tools is preventing detection. Even if you employ the most advanced methodologies available, your tool will likely be detected eventually. At this point, the goal becomes making the analyst/reverser's life as difficult as possible.
 
-There are a number of ways of doing this, including breaking your payload up into smaller chunks to limit exposure and [loading functionality at runtime](https://x-c3ll.github.io/posts/fileless-memfd_create/). However, this post will focus on a different method. "Hardening" binary payloads. 
+There are a number of ways of doing this, including breaking your payload up into smaller chunks to limit exposure and [loading functionality at runtime](https://x-c3ll.github.io/posts/fileless-memfd_create/). However, this post will focus on a different method: "Hardening" binary payloads. 
 
-Binary hardening can involve a variety of techniques. For example, flexibility in binary formats allows for alterations that can confuse reversing tools. Another possible hardening procedure is **encryption**. This is also known as [polymorphism](https://security.stackexchange.com/questions/4619/oligomorphism-vs-polymorphism-vs-metamorphism-in-malware).
+Binary hardening can involve a variety of techniques. For example, flexibility in binary formats allows for alterations that can confuse reversing tools. Another possible hardening procedure is **encryption**.  
+
+Encrypting our binary will make it far more difficult for an analyst to examine it, as they will no longer be able to use their tools to dissasemble it. However, this may also increase the chances of the payload being detected due to [entropy](https://www.cyberbit.com/blog/endpoint-security/malware-terms-code-entropy/). Encrypting the binary masks its true form, essentially giving it a polyjuice potion.
 
 <div style="text-align:center;">
     <img alt="Polyjuice potion" src="/images/Polyjuice-Potion.jpg" height=250 />
 </div>
 
-Encrypting our binary will make it far more difficult for an analyst to examine it, as they will no longer be able to use their tools to dissasemble it. However, this may also increase the chances of the payload being detected due to [entropy](https://www.cyberbit.com/blog/endpoint-security/malware-terms-code-entropy/).
-
 An astute reader may immediately ask the question, "But if the binary is encrypted, how can it execute?". The short answer is: _it can't_. However, we can fix this by having the binary decrypt itself. This series of posts will focus on automating the ability to do just that, as well as potentially adding additional hardening techniques.
 
-Disclaimer: In order to better defend against malware, it's important to understand it's functionality. This post is intended to be used as an educational resource only.
+Disclaimer: In order to better defend against malware, it's important to understand its functionality. This post is intended to be used as an educational resource only.
 
 ------
 
 ## Encryption
 
-Now that we've established our goal of creating polymorphic code, how would we go about it? Once possible strategy is to encrypt all functionality besides the entrypoint, then have the process decrypt it's other functions at the beginning of execution. Below is an example of how we could accomplish the encryption portion of this using Python:
+Now that we've established our goal of creating polymorphic code, how would we go about it? One possible strategy is to encrypt all functionality besides the entrypoint, then have the process decrypt its other functions at the beginning of execution. Below is an example of how we could accomplish the encryption portion of this using Python:
 
 ```python
 #!/usr/bin/env python3
