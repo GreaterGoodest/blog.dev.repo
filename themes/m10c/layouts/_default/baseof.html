@@ -40,6 +40,9 @@
         {{ end }}
       </div>
       {{- end }}
+    <aside>
+      {{ .Page.TableOfContents }}
+    </aside>
     </header>
     <main class="app-container">
       {{ block "main" . }}
