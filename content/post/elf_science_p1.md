@@ -34,7 +34,7 @@ Disclaimer: In order to better defend against malware, it's important to underst
 
 ## Encryption
 
-Now that we've established our goal of creating polymorphic code, how would we go about it? One possible strategy is to encrypt all functionality besides the entrypoint, then have the process decrypt its other functions at the beginning of execution. Below is an example of how we could accomplish the encryption portion of this using Python:
+Now that we've established our goal of creating self-decrypting code, how would we go about it? One possible strategy is to encrypt all functionality besides the entrypoint, then have the process decrypt its other functions at the beginning of execution. Below is an example of how we could accomplish the encryption portion of this using Python:
 
 ```python
 #!/usr/bin/env python3
