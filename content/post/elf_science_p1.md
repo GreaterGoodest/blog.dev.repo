@@ -1,10 +1,12 @@
 ---
 title: "ELF Science Part 1"
 date: 2021-11-15T16:00:44-06:00
-draft: true
+draft: false
 ---
 
 ## Introduction
+
+You can find part 2 in this series [here](/post/elf_science_p2/)
 
 Prereqs:
 - [C](https://www.youtube.com/watch?v=1uR4tL-OSNI&ab_channel=CalebCurry)
