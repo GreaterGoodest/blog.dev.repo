@@ -37,8 +37,17 @@ rgood@debian:~/Playground/self-decrypt$ objdump -D main -M intel| grep "encrypt_
 
 As you can see, the encrypt_me function is currently gibberish due to it being encrypted. This function will be decrypted at run time, as the binary has self-decrypting logic built in. 
 
+Let's see that decryption in action:
+
+![GDB Decrypt](/images/gdb-decrypt.gif)
+
+We start by loading the binary into gdb (i'm also using pwndbg). We then begin execution and break at the encrypoint by using the 'start' command. After starting the process, we take a look at the encrypt_me function, and see that it is in it's encrypted state. Next, we set a breakpoint after the decryption is complete (line 32). After reaching that breakpoint, we take another look at the function and see that it is now decrypted.
+
+Our next goal will be to dump out that decrypted data.
+
+## Data Dump
+
 TODO:
-- step through showing it in its decrypted state
 - dump 401000-402000 to copy decrypted data out
 - write dumped data to binary at 1000-2000 to create decrypted version (will need to create python script for this)
 - show static analysis
