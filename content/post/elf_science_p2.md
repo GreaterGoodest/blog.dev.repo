@@ -41,7 +41,7 @@ Let's see that decryption in action:
 
 ![GDB Decrypt](/images/gdb-decrypt.gif)
 
-We start by loading the binary into gdb (i'm also using pwndbg). We then begin execution and break at the encrypoint by using the 'start' command. After starting the process, we take a look at the encrypt_me function, and see that it is in it's encrypted state. Next, we set a breakpoint after the decryption is complete (line 32). After reaching that breakpoint, we take another look at the function and see that it is now decrypted.
+We start by loading the binary into gdb (i'm also using pwndbg). We then begin execution and break at the entrypoint by using the 'start' command. After starting the process, we take a look at the encrypt_me function, and see that it is in it's encrypted state. Next, we set a breakpoint after the decryption is complete (line 32). After reaching that breakpoint, we take another look at the function and see that it is now decrypted.
 
 Our next goal will be to dump out that decrypted data.
 
@@ -113,7 +113,7 @@ Now we have a data.bin file that contains the decrypted function.
 
 ## Patching
 
-The next step is to patch the original binary with the decrypted data held within data.bin. To do that, we'll use another python script we'll call "overwrite.py".
+The next step is to patch the original binary with the decrypted data held within data.bin. To do that, we'll use another python script called "overwrite.py".
 
 ```python
 #!/usr/bin/env python3
@@ -148,15 +148,17 @@ if __name__ == "__main__":
     stomp(binary, write_address, replacement)
 ```
 
-This script takes in as arguments the original binary to be modified (arg 1), the address in the binary to write to (arg 2), and the data to write to the target address (arg 3).
+This script takes in as arguments the original binary to be modified (arg 1), the address in the binary at which to write (arg 2), and the file containing the data to put there (arg 3).
 
-This isn't really using any new methods from what we saw in the first post in this series. It opens the file containing the replacement data, and reads it into memory. It then opens the original binary file, seeks to the address we provides, and overwrites the data there with the replacement data.
+This isn't really using any new methods from what we saw in the first post in this series. It opens the file containing the replacement data, and reads it into memory. It then opens the original binary file, seeks to the address we provided, and overwrites the data there with the replacement data.
 
 We can now use this script to patch our binary
 
 ```shell
 rgood@debian:~/Playground/self-decrypt$ ./overwrite.py main 0x1000 data.bin
 ```
+
+You'll remember from part 1 that 0x1000 is where the data actually resides on disk, so this is where we will write the replacement data.
 
 Now we can see that our binary contains the decrypted function while at rest
 
@@ -184,9 +186,9 @@ Main function
 Illegal instruction
 ```
 
-This is because the binary is attempted to "decrypt" an already decrypted function. The result is a crash due to attempting to run garbage instructions.
+This is because the binary is attempted to "decrypt" an already decrypted function. The result is a crash due to attempting to execute garbage instructions.
 
-In this example, we can quickly patch this by NOPing out the xor instructions. NOP is an instruction that simply does nothing, and the hex code for it is 0x90. Replacing the encryption instructions (xor) with this, will remove that logic cleanly.
+In this example, we can quickly patch this by NOPing out the xor instructions, as this will remove our simple encryption. NOP is an instruction that simply does nothing, and the hex code for it is 0x90. Replacing the encryption xor instruction with this will remove that logic cleanly.
 
 Let's take at the main() function:
 
@@ -227,7 +229,7 @@ rgood@debian:~/Playground/self-decrypt$ objdump -D main -M intel| grep "main>:" 
   4011d7:       34 fa                   xor    al,0xfa
 ```
 
-At the end of instructions, we can see our xor encryption culprit. The instructions to accomplish the xor is 0x34 0xfa, where 0x34 is the code for xor, and 0xfa is the encryption/decryption key.
+At the end of the printed instructions, we can see our xor encryption culprit. The instructions to accomplish the xor is 0x34 0xfa, where 0x34 is the code for xor, and 0xfa is the encryption/decryption key.
 
 Let's NOP out those instructions.
 
