@@ -12,7 +12,8 @@ disqusShortname = 'https-greatergoodest-github-io'
 [params]
   author = "Ryan Good"
   avatar = "images/greatergoodest.jpg"
-  description = "Blogging about netsec and malware stuff"
+  description = "Blogging about dev, netsec, and malware"
+  css = ["css/custom.css"]
 
   [[params.social]]
   icon = "linkedin"

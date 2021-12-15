@@ -14,7 +14,7 @@ Inspired by some feedback from [@marisa_hacks](https://twitter.com/marisa_hacks)
 
 We'll perform dynamic analysis on the binary in order to step through to the point at which it is decrypted. Once we have the binary in it's decrypted form, we will dump out the executable portion of intrest. We will then overwrite the binary with this decrypted data, allowing for better static analysis in future. To take things a step further, we'll then strip out the encryption logic.
 
-## Dynamic Analysis and Decryption
+## Analysis and Decryption
 
 Let's take a look at the binary resulting from our previous post.
 
