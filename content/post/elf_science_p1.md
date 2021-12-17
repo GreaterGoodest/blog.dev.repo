@@ -6,7 +6,10 @@ draft: false
 
 ## Introduction
 
-You can find part 2 in this series [here](/post/elf_science_p2/)
+This post is part of a three part series (so far) 
+- [Part 2](/post/elf_science_p2/)
+- [Part 3](/post/elf_science_p3/)
+
 
 Prereqs:
 - [C](https://www.youtube.com/watch?v=1uR4tL-OSNI&ab_channel=CalebCurry)

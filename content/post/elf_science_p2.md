@@ -6,7 +6,9 @@ draft: false
 
 ## Introduction
 
-This post is a follow up to [part 1](/post/elf_science_p1/).
+This post is part of a three part series (so far) 
+- [Part 1](/post/elf_science_p1/)
+- [Part 3](/post/elf_science_p3/)
 
 In the last post, we demonstrated a basic method for creating a self-decrypting binary. This is a common technique in many malware variants to add difficulty to the reverse engineering process.
 
