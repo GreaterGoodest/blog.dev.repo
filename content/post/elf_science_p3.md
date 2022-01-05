@@ -18,3 +18,44 @@ Firstly, we'll check to see if we're are being run in a debugger. If that's the 
 
 Of course, once we've implemented these new features we will also explore how easily they can be defeated. 
 
+## Detecting Debugger
+
+One neat thing we can do during execution is access our own process information located within /proc/self/status. This file can give us useful information such as our Pid and Parent Pid. We can also use the TracerPid value to determine if something is attempting to debug us. 
+
+For example, let's look at the status file of a random process (chrome-sandbox):
+
+```shell
+rgood@debian:~/Projects/blog.dev.repo$ sudo cat /proc/43338/status                                                    
+Name:   chrome-sandbox                                                                                                
+Umask:  0022                                                                                                          
+State:  S (sleeping)                                                                                                  
+Tgid:   43338                                                                                                         
+Ngid:   0                                                                                                             
+Pid:    43338                                                                                                         
+PPid:   43323                                                                                                         
+TracerPid:      0
+```
+
+Here we can see that the TracerPid is 0, as there is no debugger attached to the process. Now let's take a look a process i've attached gdb to:
+
+```shell
+rgood@debian:~/Projects/blog.dev.repo$ sudo cat /proc/43312/status                                                    
+Name:   a.out                                                                                                         
+Umask:  0022                                                                                                          
+State:  t (tracing stop)                                                                                              
+Tgid:   43312                                                                                                         
+Ngid:   0                                                                                                             
+Pid:    43312                                                                                                         
+PPid:   43309                                                                                                         
+TracerPid:      43309
+```
+
+Here we can see that the TracerPid has a non-zero value. If we take a look at this pid, we can see that it's our gdb process pid:
+
+```shell
+rgood@debian:~/Projects/blog.dev.repo$ sudo cat /proc/43309/status                                                    
+Name:   gdb
+```
+
+Using this knowledge, we will add a check into our binary to determine if a debugger has attached to us.
+
