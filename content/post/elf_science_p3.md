@@ -279,7 +279,7 @@ int main()
 
 This implementation is fairly trivial, and real world samples will make it much more difficult to determine that they are even doing these checks.
 
-To defeat this exmample, we'll just add in a relative jump.
+To defeat this example, we'll just add in a relative jump.
 
 By looking at the dissasembly, we can see the distance we need to jump.
 
@@ -354,4 +354,4 @@ I'm not sure why the relative jump ended up being interpreted as 47 bytes, but w
 
 ## Conclusion
 
-The methodologies shown here are a highly simplified version of real world techniques, that are still useful to showcase what is possible in the realm of anti-RE. Feel free to contact me with any suggestions and/or corrections. Thanks for reading!
+The methodologies shown here are a highly simplified version of real world techniques, but are still useful to showcase what is possible in the realm of anti-RE. Feel free to contact me with any suggestions and/or corrections. Thanks for reading!
