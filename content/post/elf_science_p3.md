@@ -12,7 +12,7 @@ This post is part of a three part series (so far)
 
 As usual, a regularly updated version of the code base associated with this series can be found on my [github](https://github.com/GreaterGoodest/elf-magic).
 
-In the last edition of ELF Science, we defeated our encryption methodology by running the binary in a debugger, setting a breakpoint after self-decryption is complete, and dumping the decrypted memory. We then re-wrote the binary using these decrypted instructions, and NOP'd out the xor encryption method.
+In the last ELF Science post, we defeated our encryption methodology by running the binary in a debugger, setting a breakpoint after self-decryption is complete, and dumping the decrypted memory. We then re-wrote the binary using these decrypted instructions, and NOP'd out the xor encryption method.
 
 In this edition, we'll return to our scheming ways and discuss additional ways to frustrate would be reversers. 
 
