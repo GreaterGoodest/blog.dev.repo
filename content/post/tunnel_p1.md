@@ -1,7 +1,7 @@
 ---
 title: "Sneaky Packets Part 1 - Basic Proxy/Tunnel"
 date: 2022-05-08T17:49:54-05:00
-draft: true
+draft: false 
 ---
 
 ## Introduction
@@ -14,6 +14,18 @@ Now you might be wondering why we would want to build our own proxy and/or tunne
     <img alt="Roll Your Own" src="/images/rollurown.PNG" height=300 />
 </div>
 
-Well those solutions are boring, and we're not skids so we want to understand how this kind of stuff works under the hood. Knowing how to implement these types of features also allows you to add them into all sorts of useful tools, as well as understanding how adversaries might be using them in their capabilities.
+Well those solutions are boring, and we're not skids so we want to understand how this kind of stuff works under the hood. Knowing how to implement these types of features also allows you to add them into all sorts of useful tools, as well as understanding how adversaries might be using them in their capabilities. In addition, having unique tools can often reduce the chances of your methodologies/tools already being signaturized.
+
+This tutorial will walk you through how to implement your own simple proxy and tunnelling capability. I've also put together a docker-based environment involving multiple containers to show you some typical use cases.
+
+
+## Proxying
+
+To build towards the concept of tunneling, we'll start by implementing a simple proxy. Proxies are fairly simple and most people are familiar with them, making them a great starting point. The proxy I'll be demonstrating in this tutorial is purposefully as simple as possible. For that reason it is not at all ready for any sort of deployment (don't use it). This also goes for the tunneling code shown later. Perhaps as we build on these techniques in future tutorials, we'll approach something remotely deployable. 
+
+
+![Proxy](/images/proxy.gif)
+
+## Tunnelling
 
 ![Tunnel to Private Web](/images/tunnel-to-priv-web.gif)
