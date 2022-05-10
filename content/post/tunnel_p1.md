@@ -20,13 +20,15 @@ Well those solutions are boring, and we're not skids so we want to understand ho
 
 This tutorial will walk you through how to implement your own simple proxy and tunnelling capability. I've also put together a docker-based environment involving multiple containers to show you some typical use cases.
 
-## Proxying
+## Proxying Summary
 
 To build towards the concept of tunneling, we'll start by implementing a simple proxy. Proxies are fairly simple and most people are familiar with them, making them a great starting point. The proxy I'll be demonstrating in this tutorial is purposefully as simple as possible. For that reason it is not at all ready for any sort of deployment (don't use it). This also goes for the tunneling code shown later. Perhaps as we build on these techniques in future tutorials, we'll approach something remotely deployable. 
 
 The concept of a proxy is straight forward enough. A proxy simply acts as a forwarding agent for any of your network traffic. In this case we'll be focusing on [TCP](https://www.fortinet.com/resources/cyberglossary/tcp-ip#:~:text=TCP%20stands%20for%20Transmission%20Control,data%20and%20messages%20over%20networks.) based communications, but similar methodologies would allow this to also be expanded to [UDP](https://www.techtarget.com/searchnetworking/definition/UDP-User-Datagram-Protocol#:~:text=User%20Datagram%20Protocol%20(UDP)%20is,provided%20by%20the%20receiving%20party.). In our example, we'll create a bare bones TCP traffic forwarder that will listen for connections on a specified port, and forward the received traffic to a specified destination.  
 
 ![Proxy](/images/proxy.gif)
+
+## Proxy Main
 
 Our main function will set up a local listener to receive any traffic that is to be forwarded. Upon receiving a connection, it will establish another connection to the specified final destination. At this point it will loop, transfering data back and forth from the original source to the final destination and vice versa. The proxy sits in the middle of these interactions, ensuring packets get where they are supposed to go, and somewhat masking the identity of the original source.
 
@@ -48,47 +50,43 @@ int main()
         return 1;
     }
 
-    while(1){ 
-        if (client_sock <= 0)
+    client_sock = accept(listen_sock, (struct sockaddr *)&client_addr, &(int){0});
+    if (client_sock == -1)
+    {
+        if (errno != EAGAIN){
+            perror("main accept");
+            return errno;
+        }
+    } else 
+    {
+        puts("accepted");
+        status = fcntl(client_sock, F_SETFL, fcntl(client_sock, F_GETFL, 0) | O_NONBLOCK);
+        if (status == -1)
         {
-            client_sock = accept(listen_sock, (struct sockaddr *)&client_addr, &(int){0});
-            if (client_sock == -1)
-            {
-                if (errno != EAGAIN){
-                    perror("main accept");
-                    return errno;
-                }
-            } else 
-            {
-                puts("accepted");
-                status = fcntl(client_sock, F_SETFL, fcntl(client_sock, F_GETFL, 0) | O_NONBLOCK);
-                if (status == -1)
-                {
-                    perror("main client_sock fnctl");
-                    return status;
-                }
-            }
-        }else {
-            if (!remote_sock){
-                status = setup_remote_sock(&remote_sock);
-                if (status != 0)
-                {
-                    puts("main: Failed to setup remote socket.");
-                    return 1;
-                }
-            }
-            status = data_checks(client_sock, remote_sock);
-            if (status < 0 && errno != EAGAIN)
-            {
-                puts("main: Failed data checks.");
-                return 1;
-            }else if (status == 0){
-                puts("connection closed");
-                close(client_sock);
-                close(remote_sock);
-                client_sock = 0;
-                remote_sock = 0;
-            }
+            perror("main client_sock fnctl");
+            return status;
+        }
+    }
+
+    status = setup_remote_sock(&remote_sock);
+    if (status != 0)
+    {
+        puts("main: Failed to setup remote socket.");
+        return 1;
+    }
+
+    while(1){ 
+        status = data_checks(client_sock, remote_sock);
+        if (status < 0 && errno != EAGAIN)
+        {
+            puts("main: Failed data checks.");
+            return 1;
+        }else if (status == 0){
+            puts("connection closed");
+            close(client_sock);
+            close(remote_sock);
+            client_sock = 0;
+            remote_sock = 0;
         }
     }
 
@@ -106,6 +104,8 @@ The code above starts by setting up the local listener, which awaits connections
         return 1;
     }
 ```
+
+## Proxy Listen
 
 Let's take a look at how we're accomplishing this:
 
@@ -198,6 +198,31 @@ listen(*listen_sock, SOMAXCONN);
 We're now ready to receive connections to proxy! Of course if we actually receive any connections at this point, we'll just end up dropping them.
 
 ![charlie fail](/images/charlie-brown-fail.gif)
+
+In order to actually receive a new connection we'll need to accept it. We'll then have a new socket associated with that connection.
+
+```c
+client_sock = accept(listen_sock, (struct sockaddr *)&client_addr, &(int){0});
+if (client_sock == -1)
+{
+    if (errno != EAGAIN){
+        perror("main accept");
+        return errno;
+    }
+} else 
+{
+    puts("accepted");
+    status = fcntl(client_sock, F_SETFL, fcntl(client_sock, F_GETFL, 0) | O_NONBLOCK);
+    if (status == -1)
+    {
+        perror("main client_sock fnctl");
+        return status;
+    }
+}
+```
+
+You'll see we're also altering the settings associated with the socket via the [fcntl](https://man7.org/linux/man-pages/man2/fcntl.2.html) system call. Don't worry too much about how this works, just know that the **O_NONBLOCK** flag makes the socket "non-blocking". This allows the program to keep functioning even when we aren't receving new data on this socket. You'll see why this matters soon enough.
+
 
 ## Tunnelling
 
