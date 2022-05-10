@@ -8,9 +8,9 @@ draft: false
 
 The repo associated with this project can be found [here](https://github.com/GreaterGoodest/tunnel).
 
-Don't you hate it when pesky firewall rules or network configurations prevent you from reaching your favorite malicious domains? I know it's an every day frustration for most folks when their implants can't properly reach back to their Command and Control (C2). Let's dive into some things we can do to alleviate common networking challenges faced by red teams, as well as inform blue teamers of typical shenanigans used to circumvent various network protections.  
+Don't you hate it when pesky firewall rules or network configurations prevent you from reaching your favorite definitely non-malicious domains? Someone recently told me that their workplace even blocks connections on port 1337! We can't have that. Let's dive into some things we can do to alleviate common networking challenges faced by red teams, as well as inform blue teamers of typical shenanigans used to circumvent various network protections.  
 
-Now you might be wondering why we would want to build our own proxy and/or tunneling capability when there's lots of great open source tools already available. We could use [NGINX](https://www.nginx.com/) to proxy our traffic, or [SSH](https://en.wikipedia.org/wiki/Secure_Shell) to create any tunnels we might need. 
+Now you might be wondering why we would want to build our own proxy and/or tunneling capability when there's lots of great open source tools already available. We could use [NGINX](https://www.nginx.com/) to proxy our traffic, or [SSH](https://en.wikipedia.org/wiki/Secure_Shell) to create any basic TCP tunnels we might need. 
 
 <div style="text-align:center;">
     <img alt="Roll Your Own" src="/images/rollurown.PNG" height=300 />
@@ -20,7 +20,7 @@ Well those solutions are boring, and we're not skids so we want to understand ho
 
 This tutorial will walk you through how to implement your own simple proxy and tunnelling capability. I've also put together a docker-based environment involving multiple containers to show you some typical use cases.
 
-I'd also like to point out that a tunnel also usually involves encapsulating data into a pre-existing protocol (http, icmp, dns, your own custom protocol, etc.). We're not going to implement that piece here, but will likely do it in a follow on post. This post focuses on taking in a connection and forwarding it to a destination, while also bypassing potential blocks along the way.
+I'd also like to point out that a tunnel also usually involves encapsulating data into a pre-existing protocol (http/s, icmp, dns, your own custom protocol, etc.). We're not going to implement that piece here, but will likely do it in a follow on post. This post focuses on taking in a connection and getting it to a destination, while also bypassing potential blocks along the way.
 
 ## Proxying Summary
 
@@ -30,7 +30,7 @@ The concept of a proxy is straight forward enough. A proxy simply acts as a forw
 
 ![Proxy](/images/proxy.gif)
 
-## Proxy Main
+## Main
 
 Our main function will set up a local listener to receive any traffic that is to be forwarded. Upon receiving a connection, it will establish another connection to the specified final destination. At this point it will loop, transfering data back and forth from the original source to the final destination and vice versa. The proxy sits in the middle of these interactions, ensuring packets get where they are supposed to go, and somewhat masking the identity of the original source.
 
@@ -107,7 +107,7 @@ The code above starts by setting up the local listener, which awaits connections
     }
 ```
 
-## Proxy Listen
+## Listen
 
 Let's take a look at how we're accomplishing this:
 
@@ -225,7 +225,7 @@ if (client_sock == -1)
 
 You'll see we're also altering the settings associated with the socket via the [fcntl](https://man7.org/linux/man-pages/man2/fcntl.2.html) system call. Don't worry too much about how this works, just know that the **O_NONBLOCK** flag makes the socket "non-blocking". This allows the program to keep moving even when we aren't receving new data on this socket. You'll see why this matters soon enough.
 
-## Proxy Remote Connection
+## Remote Connection
 
 Now we have our client connected, we'll want to connect them to their destination.
 
@@ -279,6 +279,8 @@ int setup_remote_sock(int *remote_sock)
     return status;
 }
 ```
+
+## Data Exchange
 
 Great! Our connections are set up and we're ready to exchange data. To accomplish this we'll loop continually, checking for new data from either side on each loop iteration. If there's any new data, we'll forward it to the appropriate destination.
 
@@ -335,7 +337,7 @@ Here's where using non-blocking sockets is important. With our current implement
 
 Let's see this in action...
 
-
+**INSERT GIF HERE**
 
 ## Tunnelling
 
