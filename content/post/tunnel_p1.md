@@ -20,6 +20,8 @@ Well those solutions are boring, and we're not skids so we want to understand ho
 
 This tutorial will walk you through how to implement your own simple proxy and tunnelling capability. I've also put together a docker-based environment involving multiple containers to show you some typical use cases.
 
+I'd also like to point out that a tunnel also usually involves encapsulating data into a pre-existing protocol (http, icmp, dns, your own custom protocol, etc.). We're not going to implement that piece here, but will likely do it in a follow on post. This post focuses on taking in a connection and forwarding it to a destination, while also bypassing potential blocks along the way.
+
 ## Proxying Summary
 
 To build towards the concept of tunneling, we'll start by implementing a simple proxy. Proxies are fairly simple and most people are familiar with them, making them a great starting point. The proxy I'll be demonstrating in this tutorial is purposefully as simple as possible. For that reason it is not at all ready for any sort of deployment (don't use it). This also goes for the tunneling code shown later. Perhaps as we build on these techniques in future tutorials, we'll approach something remotely deployable. 
@@ -212,7 +214,7 @@ if (client_sock == -1)
 } else 
 {
     puts("accepted");
-    status = fcntl(client_sock, F_SETFL, fcntl(client_sock, F_GETFL, 0) | O_NONBLOCK);
+    status = fcntl(client_sock, F_SETFL, fcntl(client_sock, F_GETFL, 0) | O_NONBLOCK); // Add non-blocking to existing settings
     if (status == -1)
     {
         perror("main client_sock fnctl");
@@ -221,7 +223,118 @@ if (client_sock == -1)
 }
 ```
 
-You'll see we're also altering the settings associated with the socket via the [fcntl](https://man7.org/linux/man-pages/man2/fcntl.2.html) system call. Don't worry too much about how this works, just know that the **O_NONBLOCK** flag makes the socket "non-blocking". This allows the program to keep functioning even when we aren't receving new data on this socket. You'll see why this matters soon enough.
+You'll see we're also altering the settings associated with the socket via the [fcntl](https://man7.org/linux/man-pages/man2/fcntl.2.html) system call. Don't worry too much about how this works, just know that the **O_NONBLOCK** flag makes the socket "non-blocking". This allows the program to keep moving even when we aren't receving new data on this socket. You'll see why this matters soon enough.
+
+## Proxy Remote Connection
+
+Now we have our client connected, we'll want to connect them to their destination.
+
+```c
+status = setup_remote_sock(&remote_sock);
+```
+
+The process for this is very similar to how we set up the local connection, except simpler. We don't need to bind anything or listen for connections, we simply establish a connection to the configured remote address. Once again, the resulting socket will be made non-blocking.
+
+```c
+/**
+ * @brief Set up the remote socket
+ * 
+ * @param remote_sock target socket to proxy traffic to
+ * @return int error code
+ */
+int setup_remote_sock(int *remote_sock)
+{
+    int status = 0;
+    struct sockaddr_in remote_addr;
+
+    *remote_sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (*remote_sock == -1)
+    {
+        perror("setup_remote_sock: socket");
+        return -1;
+    }
+
+    remote_addr.sin_family = AF_INET;
+    status = inet_pton(AF_INET, REMOTE_ADDR, &(remote_addr.sin_addr));
+    if (status != 1)
+    {
+        perror("setup_remote_sock: inet_pton");
+        return -1;
+    }
+    remote_addr.sin_port = htons(REMOTE_PORT);
+
+    status = connect(*remote_sock, (struct sockaddr *)&remote_addr, sizeof(remote_addr));
+    if (status == -1)
+    {
+        perror("setup_remote_sock: connect");
+        return status;
+    }
+    status = fcntl(*remote_sock, F_SETFL, fcntl(*remote_sock, F_GETFL, 0) | O_NONBLOCK);
+    if (status == -1)
+    {
+        perror("setup_local_listener fnctl");
+        return status;
+    }
+
+    return status;
+}
+```
+
+Great! Our connections are set up and we're ready to exchange data. To accomplish this we'll loop continually, checking for new data from either side on each loop iteration. If there's any new data, we'll forward it to the appropriate destination.
+
+```c
+while(1){ 
+    status = data_checks(client_sock, remote_sock);
+    if (status < 0 && errno != EAGAIN)
+    {
+        puts("main: Failed data checks.");
+        return 1;
+    }else if (status == 0){
+        puts("connection closed");
+        close(client_sock);
+        close(remote_sock);
+        client_sock = 0;
+        remote_sock = 0;
+    }
+}
+```
+
+And here's our data checks:
+
+```c
+/**
+ * @brief Checks for new data from client/server
+ * 
+ * @param client_sock connected client socket
+ * @param remote_sock socket connection to target host
+ * @return int error code
+ */
+int data_checks(int client_sock, int remote_sock)
+{
+    int status = 0;
+
+    char data[MAX_TCP] = {0};
+    status = read(client_sock, data, sizeof(data)-1);
+    if (strlen(data) > 0)
+    {
+        write(remote_sock, data, strlen(data)+1);
+        memset(data, 0, sizeof(data));
+    }
+    status = read(remote_sock, data, sizeof(data)-1);
+    if (strlen(data) > 0)
+    {
+        write(client_sock, data, strlen(data)+1);
+        memset(data, 0, sizeof(data));
+    }
+
+    return status;
+}
+```
+
+Here's where using non-blocking sockets is important. With our current implementation, data can go back and forth from either side at any interval. If we were using traditional blocking sockets, we'd restrict our connection to requiring the opposite side to send something back before we could continue. This might work for an http connection or something similar, but would fail for something like a remote shell or chat client.
+
+Let's see this in action...
+
 
 
 ## Tunnelling
