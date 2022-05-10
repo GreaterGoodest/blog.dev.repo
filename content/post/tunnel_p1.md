@@ -339,7 +339,7 @@ Let's see this in action...
 
 ![Proxy Gif](/images/Proxy.gif)
 
-In the example shown, the final destination is a netcat listener waiting for connections on port 1338 (Bottom right of the screen). The proxy is initiated on the top left of the screen, and listens on port 1337. The client (left side) then connects to the proxy using a netcat client, and begins communicating with the destination server.
+In the example shown, the final destination is a [netcat](http://netcat.sourceforge.net/) listener waiting for connections on port 1338 (Bottom right of the screen). The proxy is initiated on the top left of the screen, and listens on port 1337. The client (left side) then connects to the proxy using a netcat client, and begins communicating with the destination server.
 
 ## Tunnelling
 
@@ -392,4 +392,10 @@ networks:
           gateway: 172.21.1.1
 ```
 
+In this environment we have 3 hosts. One hosting a private website (private-web), a basic host that's on the same network as the private website (private-host), and another basic host that is on a network we've labeled "public" (public-host). If you take a closer look at the "private-host", you'll see it is on both the private and public network. This will be our bridge. Ignore the **nc -lp 31337** command, i'm just using this to make sure the containers don't shut down prematurely. We won't actually be using netcat for anything in this example.
+
+What we'll be looking to accomplish in this example is to make a tool that will run on the private host. We'll also be making a quick python script to act as a client, and run on the public host. The service running on the private host will establish connections to both the public host and the private web server. It will then allow traffic to pass through it between the public host and the private web server, allowing the public host to access a service it normally would not be able to reach.
+
 ![Tunnel to Private Web](/images/tunnel-to-priv-web.gif)
+
+It's important that we're having the private host connect back to the public host. We've configured the private host so that it won't allow listening on any ports, to simulate a strict network. However, the private host is still allowed to make outbound connections. Because of this we can still establish a connection between the public and private host, and leverage that to tunnel deeper into the network of ineterest. If you're familiar with ssh, this would be like using the **-R** flag.
