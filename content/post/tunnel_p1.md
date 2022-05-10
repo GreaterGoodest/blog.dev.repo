@@ -337,7 +337,9 @@ Here's where using non-blocking sockets is important. With our current implement
 
 Let's see this in action...
 
-**INSERT GIF HERE**
+![Proxy Gif](/images/Proxy.gif)
+
+In the example shown, the final destination is a netcat listener waiting for connections on port 1338 (Bottom right of the screen). The proxy is initiated on the top left of the screen, and listens on port 1337. The client (left side) then connects to the proxy using a netcat client, and begins communicating with the destination server.
 
 ## Tunnelling
 
