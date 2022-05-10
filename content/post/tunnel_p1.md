@@ -107,6 +107,98 @@ The code above starts by setting up the local listener, which awaits connections
     }
 ```
 
+Let's take a look at how we're accomplishing this:
+
+```c
+/**
+ * @brief Sets up the local listener socket
+ * 
+ * @param listen_sock pointer to socket fd to setup
+ * @return int error code
+ */
+int setup_local_listener(int *listen_sock)
+{
+    int status = 0;
+    struct sockaddr_in listen_addr = {0};
+
+    listen_addr.sin_family = AF_INET;
+    status = inet_pton(AF_INET, LISTEN_ADDR, &(listen_addr.sin_addr));
+    if (status != 1)
+    {
+        perror("setup_local_listener inet_pton");
+        return -1;
+    }
+    listen_addr.sin_port = htons(LISTEN_PORT);
+
+    //Create listening socket to receive proxy requests
+    *listen_sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (*listen_sock == -1)
+    {
+        perror("setup_local_listener socket");
+        return status;
+    }
+    status = setsockopt(*listen_sock, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
+    if (status == -1)
+    {
+        perror("setup_local_listener setsockopt");
+        return status;
+    }
+    status = bind(*listen_sock, (struct sockaddr *)&listen_addr, sizeof(listen_addr));
+    if (status == -1)
+    {
+        perror("setup_local_listener bind");
+        return status;
+    }
+    status = listen(*listen_sock, SOMAXCONN);
+    if (status == -1)
+    {
+        perror("setup_local_listener listen");
+        return status;
+    }
+
+    return status;
+}
+```
+
+It might seem like a lot, but the vast majority of this is just error checking.
+
+The first thing we're doing to set up the local listener is filling in the **listen_addr** struct with appropriate values. 
+
+We'll start by converting our listening address (**LISTEN_ADDR**) to a form the linux kernel expects (an integer) via the [inet_pton](https://man7.org/linux/man-pages/man3/inet_pton.3.html) syscall.
+
+```c
+inet_pton(AF_INET, LISTEN_ADDR, &(listen_addr.sin_addr));
+```
+
+The port is already an integer, but it's in little endian format, and needs to be converted to big endian. What this basically means is that the port number needs to be converted from something our local CPU understands, to a universal network standard. The [htons](https://linux.die.net/man/3/htons) system call will handle this for us.
+
+```c
+listen_addr.sin_port = htons(LISTEN_PORT);
+```
+
+Now that our **listen_addr** struct is built, we can set up the socket itself. AF_INET refers to ipv4, and SOCK_STREAM informs the kernel we'll be using TCP. As a side note, you can do some pretty neat stuff in regards to inter-process communication (IPC) using [AF_UNIX](https://man7.org/linux/man-pages/man7/unix.7.html) sockets.
+
+```c
+*listen_sock = socket(AF_INET, SOCK_STREAM, 0);
+```
+
+Next, we'll allow our socket to be re-usable. This makes it so that our operating system won't try to prevent us from listening on the port again if the process crashes. The **&(int){1}** value basically just allows us to ignore some of the output this function provides, as we don't really care.
+
+```c
+setsockopt(*listen_sock, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
+```
+
+Lastly, we'll bind our socket to the information stored in **listen_addr*, and begin listening for connections.
+
+```c
+bind(*listen_sock, (struct sockaddr *)&listen_addr, sizeof(listen_addr));
+listen(*listen_sock, SOMAXCONN);
+```
+
+We're now ready to receive connections to proxy! Of course if we actually receive any connections at this point, we'll just end up dropping them.
+
+![charlie fail](/images/charlie-brown-fail.gif)
+
 ## Tunnelling
 
 Before we get into the technical implementation of tunneling, let's take a look at the environment we'll be moving our packets through (docker-compose).
