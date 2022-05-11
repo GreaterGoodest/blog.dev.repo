@@ -603,3 +603,21 @@ Our python listener functions very similarly to the original proxy. The syntax i
 
 ## Tunnel Demonstration
 
+In this demonstration, both windows on the left hand side will be running within the "public-host" container. The top left will be the client (wget) and the bottom left will run the local forwarding service (python script). On the right hand side we will have the "private-host" container running the remote service that will be used to provide the bridge to the private web server "private-web".
+
+![Tunnel Demo](/images/Tunnel.gif)
+
+As we discussed, you will see the python client listener being launched on the bottom left (public-host), and then the remote service connects back to it from private-host. We are then able to run wget on the public-host, targetted at localhost port 1336. This request is routed through the local listening python service, to the remote service on private-host, and finally to the private web server that the private host is able to reach. The private web server can then send the requested page back through the tunnel.
+
+If you'd like to recreate this demo, you can run docker-compose from the devops directory, and then exec into the containers as desired.
+
+```shell
+docker-compose build
+docker-compose up -d
+docker ps  # Look at container IDs
+docker exec -it [container ID] sh
+```
+
+In it's current state, this tool set is a very simplified tunnel. To really be useful, we'd want to wrap the traffic being passed through the tunnel in something like https. This would help us blend in with existing network traffic. 
+
+Anyway, that's it for now! In future perhaps we'll discuss things like tunneling through other protocols, encrypting traff, handling multiple clients/destinations simultaneously, etc. Feel free to reach out with any feedback or questions. Thanks for making it to the end!
