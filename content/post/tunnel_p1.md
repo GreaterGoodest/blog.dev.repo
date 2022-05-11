@@ -620,4 +620,4 @@ docker exec -it [container ID] sh
 
 In it's current state, this tool set is a very simplified tunnel. To really be useful, we'd want to wrap the traffic being passed through the tunnel in something like https. This would help us blend in with existing network traffic. 
 
-Anyway, that's it for now! In future perhaps we'll discuss things like tunneling through other protocols, encrypting traff, handling multiple clients/destinations simultaneously, etc. Feel free to reach out with any feedback or questions. Thanks for making it to the end!
+Anyway, that's it for now! In future perhaps we'll discuss things like tunneling through other protocols, encrypting traffic, handling multiple clients/destinations simultaneously, etc. Feel free to reach out with any feedback or questions. Thanks for making it to the end!
