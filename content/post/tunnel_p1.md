@@ -199,7 +199,9 @@ listen(*listen_sock, SOMAXCONN);
 
 We're now ready to receive connections to proxy! Of course if we actually receive any connections at this point, we'll just end up dropping them.
 
-![charlie fail](/images/charlie-brown-fail.gif)
+<div style="text-align:center;">
+    <img alt="Roll Your Own" src="/images/charlie-brown-fail.gif" height=300 />
+</div>
 
 In order to actually receive a new connection we'll need to accept it. We'll then have a new socket associated with that connection.
 
