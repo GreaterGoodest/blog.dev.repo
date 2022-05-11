@@ -343,7 +343,7 @@ Let's see this in action...
 
 ![Proxy Gif](/images/Proxy.gif)
 
-In the example shown, the final destination is a [netcat](http://netcat.sourceforge.net/) listener waiting for connections on port 1338 (Bottom right of the screen). The proxy is initiated on the top left of the screen, and listens on port 1337. The client (left side) then connects to the proxy using a netcat client, and begins communicating with the destination server.
+In the example shown, the final destination is a [netcat](http://netcat.sourceforge.net/) listener waiting for connections on port 1338 (Bottom right of the screen). The proxy is initiated on the top right of the screen, and listens on port 1337. The client (left side) then connects to the proxy using a netcat client, and begins communicating with the destination server.
 
 ## Tunnelling Summary
 
