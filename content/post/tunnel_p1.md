@@ -8,7 +8,7 @@ draft: false
 
 The repo associated with this project can be found [here](https://github.com/GreaterGoodest/tunnel).
 
-Don't you hate it when pesky firewall rules or network configurations prevent you from reaching your favorite definitely non-malicious domains? Someone recently told me that their workplace even blocks connections on port 1337! We can't have that. Let's dive into some things we can do to alleviate common networking challenges faced by red teams, as well as inform blue teamers of typical shenanigans used to circumvent various network protections.  
+Don't you hate it when pesky firewall rules or network configurations prevent you from reaching your favorite, definitely non-malicious, domains? Someone recently told me that their workplace even blocks connections on port 1337! We can't have that. Let's dive into some things we can do to alleviate common networking challenges faced by red teams, as well as inform blue teamers of typical shenanigans used to circumvent various network protections.  
 
 Now you might be wondering why we would want to build our own proxy and/or tunneling capability when there's lots of great open source tools already available. We could use [NGINX](https://www.nginx.com/) to proxy our traffic, or [SSH](https://en.wikipedia.org/wiki/Secure_Shell) to create any basic TCP tunnels we might need. 
 
@@ -16,7 +16,7 @@ Now you might be wondering why we would want to build our own proxy and/or tunne
     <img alt="Roll Your Own" src="/images/rollurown.PNG" height=300 />
 </div>
 
-Well those solutions are boring, and we're not skids so we want to understand how this kind of stuff works under the hood. Knowing how to implement these types of features also allows you to add them into all sorts of useful tools, as well as understanding how adversaries might be using them in their capabilities. In addition, having unique tools can often reduce the chances of your methodologies/tools already being signaturized.
+Well those solutions are boring, and we're not skids so we want to understand how this kind of stuff works under the hood. Knowing how to implement these types of features also allows you to add them into all sorts of useful tools. In addition, having unique tools can often reduce the chances of your methodologies/tools already being signaturized. It's also import to understand how adversaries might be using them in their capabilities. 
 
 This tutorial will walk you through how to implement your own simple proxy and tunnelling capability. I've also put together a docker-based environment involving multiple containers to show you some typical use cases.
 
@@ -166,13 +166,13 @@ It might seem like a lot, but the vast majority of this is just error checking.
 
 The first thing we're doing to set up the local listener is filling in the **listen_addr** struct with appropriate values. 
 
-We'll start by converting our listening address (**LISTEN_ADDR**) to a form the linux kernel expects (an integer) via the [inet_pton](https://man7.org/linux/man-pages/man3/inet_pton.3.html) syscall.
+We'll start by converting our listening address (**LISTEN_ADDR**) to a form the linux kernel expects (an integer) via the [inet_pton](https://man7.org/linux/man-pages/man3/inet_pton.3.html) syscall, which stands for "presentation to network".
 
 ```c
 inet_pton(AF_INET, LISTEN_ADDR, &(listen_addr.sin_addr));
 ```
 
-The port is already an integer, but it's in little endian format, and needs to be converted to big endian. What this basically means is that the port number needs to be converted from something our local CPU understands, to a universal network standard. The [htons](https://linux.die.net/man/3/htons) system call will handle this for us.
+The port is already an integer, but it's in little endian format, and needs to be converted to big endian. What this basically means is that the port number needs to be converted from something our local CPU understands, to a universal network standard. The [htons](https://linux.die.net/man/3/htons) (host to network short) system call will handle this for us.
 
 ```c
 listen_addr.sin_port = htons(LISTEN_PORT);
