@@ -1,6 +1,6 @@
 ---
 title: "Sneaky Packets Part 1 - Basic Proxy/Tunnel"
-date: 2022-05-08T17:49:54-05:00
+date: 2022-05-10T17:49:54-05:00
 draft: false 
 ---
 
@@ -301,6 +301,8 @@ while(1){
 }
 ```
 
+You'll see when we check the status of our data_checks we're also checking if the error number is **EAGAIN**. This is because we want to ignore this "error", as it just means we didn't receive any data on a non-blocking socket.
+
 And here's our data checks:
 
 ```c
@@ -341,7 +343,7 @@ Let's see this in action...
 
 In the example shown, the final destination is a [netcat](http://netcat.sourceforge.net/) listener waiting for connections on port 1338 (Bottom right of the screen). The proxy is initiated on the top left of the screen, and listens on port 1337. The client (left side) then connects to the proxy using a netcat client, and begins communicating with the destination server.
 
-## Tunnelling
+## Tunnelling Summary
 
 Before we get into the technical implementation of tunneling, let's take a look at the environment we'll be moving our packets through (docker-compose).
 
@@ -396,6 +398,208 @@ In this environment we have 3 hosts. One hosting a private website (private-web)
 
 What we'll be looking to accomplish in this example is to make a tool that will run on the private host. We'll also be making a quick python script to act as a client, and run on the public host. The service running on the private host will establish connections to both the public host and the private web server. It will then allow traffic to pass through it between the public host and the private web server, allowing the public host to access a service it normally would not be able to reach.
 
+Once the connections are established, the python script will listen for new connections, and forward them through the existing tunnel that it has created with the remote service on the private host.
+
 ![Tunnel to Private Web](/images/tunnel-to-priv-web.gif)
 
 It's important that we're having the private host connect back to the public host. We've configured the private host so that it won't allow listening on any ports, to simulate a strict network. However, the private host is still allowed to make outbound connections. Because of this we can still establish a connection between the public and private host, and leverage that to tunnel deeper into the network of ineterest. If you're familiar with ssh, this would be like using the **-R** flag.
+
+The containers we're using for these examples are pretty barebones [alpine](https://www.alpinelinux.org/) images.
+
+```dockerfile
+FROM python:3.10.4-alpine3.14
+
+WORKDIR /var/www/html
+
+RUN pip install simple_http_server
+```
+
+```dockerfile
+FROM alpine:latest
+
+WORKDIR /home/user
+```
+
+## Remote Service
+
+The code for the service running on the private host is very similar to our proxy code. The only real difference is that it's going to be connecting to both servers of interest instead of doing any listening.
+
+```c
+int main(int argc, char **argv)
+{
+    int status = 0;
+    int client_sock = 0;  // Receives proxy requests
+    int remote_sock = 0;  // Proxy target
+    struct sockaddr_in conn_addr = {0};
+
+    status = setup_client_conn(&client_sock);
+    if (status < 0)
+    {
+        puts("main: Failed to setup local listener.");
+        return 1;
+    }
+
+    status = setup_remote_sock(&remote_sock);
+    if (status != 0)
+    {
+        puts("main: Failed to setup remote socket.");
+        return 1;
+    }
+
+    while(1){ 
+            status = data_checks(client_sock, remote_sock);
+            if (status < 0 && errno != EAGAIN)
+            {
+                puts("main: Failed data checks.");
+                return 1;
+            }else if (status == 0){
+                puts("connection closed");
+                close(client_sock);
+                close(remote_sock);
+                client_sock = 0;
+                remote_sock = 0;
+            }
+    }
+
+    return 0;
+}
+```
+
+Both the setup_client_conn and the setup_remote_sock functions connect out to their respective services. I probably should have consolidated them into one function but I'm lazy so I didn't follow [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) this time. Not production code right?
+
+<div style="text-align:center;">
+    <img alt="Roll Your Own" src="/images/DRY.PNG" height=300 />
+</div>
+
+Anyway, on to the code...
+
+```c
+/**
+ * @brief Sets up the client socket
+ * 
+ * @param client_sock pointer to socket fd to setup
+ * @return int error code
+ */
+int setup_client_conn(int *client_sock)
+{
+    int status = 0;
+    struct sockaddr_in client_addr;
+
+    *client_sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (*client_sock == -1)
+    {
+        perror("setup_client_sock: socket");
+        return -1;
+    }
+
+    client_addr.sin_family = AF_INET;
+    status = inet_pton(AF_INET, CLIENT_ADDR, &(client_addr.sin_addr));
+    if (status != 1)
+    {
+        perror("setup_client_sock: inet_pton");
+        return -1;
+    }
+    client_addr.sin_port = htons(CLIENT_PORT);
+
+    status = connect(*client_sock, (struct sockaddr *)&client_addr, sizeof(client_addr));
+    if (status == -1)
+    {
+        perror("setup_client_sock: connect");
+        return status;
+    }
+    status = fcntl(*client_sock, F_SETFL, fcntl(*client_sock, F_GETFL, 0) | O_NONBLOCK);
+    if (status == -1)
+    {
+        perror("setup_client_sock fnctl");
+        return status;
+    }
+
+    return status;
+}
+```
+
+We're once again connecting to a remote server and making our socket non-blocking. And yeah setup_remote_sock is literally the same thing.
+
+## Local Listener
+
+```python
+import socket
+
+LOCAL_ADDR = '127.0.0.1'
+LOCAL_PORT = 1336
+REMOTE_ADDR = '172.21.1.2'
+REMOTE_PORT = 1337
+
+KB = 1024
+DATA_SIZE = 1 * KB
+
+def listen_for_server() -> socket.socket:
+    """Listen for remote server connection."""
+    remote_listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    remote_listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        remote_listener.bind((REMOTE_ADDR, REMOTE_PORT))
+    except:
+        print('Unable to bind listener')
+        return None
+    remote_listener.listen(5)
+    local_conn, _ = remote_listener.accept()
+    print('Received remote connection')
+    return local_conn
+
+
+def listen_local() -> socket.socket:
+    """Listen for local data to tunnel."""
+    local_listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    local_listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        local_listener.bind((LOCAL_ADDR, LOCAL_PORT))
+    except:
+        print('Unable to bind listener')
+        return None
+    local_listener.listen(5)
+    local_conn, _ = local_listener.accept()
+    print('Received local connection')
+    return local_conn
+
+def tunnel_loop(local_conn: socket.socket, remote_conn: socket.socket) -> None:
+    """Main tunnel traffic exchange loop."""
+    data = None
+    while True:
+        try:
+            data = local_conn.recv(DATA_SIZE)
+        except BlockingIOError:
+            pass
+        if data:
+            remote_conn.send(data)
+        data = None
+        try:
+            data = remote_conn.recv(DATA_SIZE)
+        except BlockingIOError:
+            pass
+        if data:
+            local_conn.send(data)
+        data = None
+
+def init():
+    """Tunnel setup and initialization."""
+    remote_conn = listen_for_server()
+    if not remote_conn:
+        return
+    remote_conn.setblocking(0)
+
+    local_conn = listen_local()
+    if not local_conn:
+        return
+    local_conn.setblocking(0)
+    tunnel_loop(local_conn, remote_conn)
+
+
+if __name__ == "__main__":
+    init()
+```
+
+Our python listener functions very similarly to the original proxy. The syntax is just a lot more readable. Some basic swaps that happen are that we use setsockopt instead of fcntl, and checking for the BlockingIOError exception instead of the EAGAIN error. Making the sockets non-blocking is as easy as calling setblocking(0).
+
+## Tunnel Demonstration
+
