@@ -1,8 +1,8 @@
-baseURL = "https://GreaterGoodest.github.io"
+baseURL = "https://ryanagood.com"
 languageCode = "en-us"
 title = "Goodest Blog"
 theme = "m10c"
-disqusShortname = 'https-greatergoodest-github-io'
+disqusShortname = 'https-ryanagood-com'
 
 [markup]
   [markup.goldmark]
