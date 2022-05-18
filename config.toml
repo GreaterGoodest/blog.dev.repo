@@ -1,8 +1,7 @@
-baseURL = "https://ryanagood.com"
+baseURL = "https://ryanagood.com/"
 languageCode = "en-us"
 title = "Goodest Blog"
 theme = "m10c"
-disqusShortname = 'https-ryanagood-com'
 
 [markup]
   [markup.goldmark]
